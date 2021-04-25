@@ -13,7 +13,7 @@
 ## Interesting data example:
 
 Operations:
-dateDeLaDemande(R)	montantNet(AK)	montantNetAbondement(AL)	libelleCommunication(AB)
+dateDeLaDemande(AK)	montantNet(BI)	montantNetAbondement(BJ)	libelleCommunication(AZ)
 
 Dispositifs:
 libelleDispositifMetier(AF)	mtBrut(AH)	mtNet(AK)	mtBrutDispo(AI)
