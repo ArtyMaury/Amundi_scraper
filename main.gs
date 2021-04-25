@@ -1,49 +1,61 @@
-const API_KEY="<TOKEN_FROM_BROWSER>"
+const API_KEY = '<TOKEN_FROM_BROWSER>'
 
-const OPERATIONS_URL="https://epargnant.amundi-ee.com/api/individu/operations?flagFiltrageWebSalarie=true&flagInfoOC=Y&filtreStatutModeExclusion=false&flagRu=true&offset="
+const OPERATIONS_URL =
+  'https://epargnant.amundi-ee.com/api/individu/operations?flagFiltrageWebSalarie=true&flagInfoOC=Y&filtreStatutModeExclusion=false&flagRu=true&offset='
 
-const DISPOSITIFS_URL="https://epargnant.amundi-ee.com/api/individu/dispositifs?flagUrlFicheFonds=true&codeLangueIso2=fr"
+const DISPOSITIFS_URL =
+  'https://epargnant.amundi-ee.com/api/individu/dispositifs?flagUrlFicheFonds=true&codeLangueIso2=fr'
+const DISPOSITIF_URL_PREFIX = 'https://epargnant.amundi-ee.com/api/individu/graphe/historiquePositionsParDispositif/'
+const DISPOSITIF_URL_SUFFIX = '?format=json&duree=60'
 
 function main() {
-  var doc = SpreadsheetApp.getActiveSpreadsheet();
-
   const dispositifs = getDispositifs()
-  const dispositifsSheet = resetSheet(doc, "DISPOSITIFS")
-  insertRawData(dispositifsSheet, dispositifs)
-  
-  const operations = getOperations()  
-  const operationsSheet = resetSheet(doc, "OPERATIONS")
-  insertRawData(operationsSheet, operations)
+  insertRawData('DISPOSITIFS', dispositifs)
 
-  updateMainSheet(doc)
+  dispositifs //
+    .map(dispositif => getDispositif(dispositif)) //
+    .forEach(dispositif => insertRawData(dispositif.nom, dispositif.data))
+
+  const operations = getOperations()
+  insertRawData('OPERATIONS', operations)
+
+  updateMainSheet()
 }
 
 function getDispositifs() {
-  const data = UrlFetchApp.fetch(DISPOSITIFS_URL, {headers: {"X-noee-authorization": API_KEY }})
+  const data = UrlFetchApp.fetch(DISPOSITIFS_URL, { headers: { 'X-noee-authorization': API_KEY } })
   const jsonData = JSON.parse(data.getContentText())
   return jsonData.listPositionsSalarieDispositifsDto.filter(dispo => dispo.mtBrut != 0)
+}
+
+function getDispositif(dispositif) {
+  const data = UrlFetchApp.fetch(DISPOSITIF_URL_PREFIX + dispositif.idDispositif + DISPOSITIF_URL_SUFFIX, {
+    headers: { 'X-noee-authorization': API_KEY },
+  })
+  const jsonData = JSON.parse(data.getContentText())
+  return { nom: dispositif.libelleDispositif, data: jsonData.listegrapheHistoriqueMvDetailDto }
 }
 
 function getOperations() {
   const operations = []
   let nbOperations = 1
-  let offset=0
-  while(operations.length < nbOperations){
-    const data = UrlFetchApp.fetch(OPERATIONS_URL + offset, {headers: {"X-noee-authorization": API_KEY }})
+  let offset = 0
+  while (operations.length < nbOperations) {
+    const data = UrlFetchApp.fetch(OPERATIONS_URL + offset, { headers: { 'X-noee-authorization': API_KEY } })
     const jsonData = JSON.parse(data.getContentText())
-    operations.push(...jsonData.operationsIndividuelles);
+    operations.push(...jsonData.operationsIndividuelles)
     nbOperations = jsonData.nbOperationsIndividuelles
-    offset ++;
+    offset++
   }
   return operations
 }
 
 /**
- *  @param {SpreadsheetApp.Spreadsheet} doc 
+ *  @param {SpreadsheetApp.Spreadsheet} doc
  *  @return {SpreadsheetApp.Sheet}
  */
-function resetSheet(doc, sheetName){
-  if (doc.getSheetByName(sheetName)){
+function resetSheet(doc, sheetName) {
+  if (doc.getSheetByName(sheetName)) {
     doc.deleteSheet(doc.getSheetByName(sheetName))
   }
   const rawSheet = doc.insertSheet()
@@ -51,83 +63,93 @@ function resetSheet(doc, sheetName){
   return rawSheet
 }
 
-function updateMainSheet(doc) {
-  let mainSheet = doc.getSheetByName("main")
+function updateMainSheet() {
+  const doc = SpreadsheetApp.getActiveSpreadsheet()
+  let mainSheet = doc.getSheetByName('main')
   if (!mainSheet) {
     mainSheet = doc.insertSheet(0)
-    mainSheet.setName("main")
+    mainSheet.setName('main')
   }
   doc.setActiveSheet(mainSheet)
-  const fullRange = mainSheet.getRange(1,1,500,50)
+  const fullRange = mainSheet.getRange(1, 1, 500, 50)
   recalculate(fullRange)
 }
 
 /**
- *  @param {SpreadsheetApp.Sheet} sheet 
- *  @param {any[]} data 
+ *  @param {String} sheetName
+ *  @param {any[]} data
  */
-function insertRawData(sheet, data){
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (data.length==0){
-    ss.toast("No data")
+function insertRawData(sheetName, data) {
+  const doc = SpreadsheetApp.getActiveSpreadsheet()
+  const sheet = resetSheet(doc, sheetName)
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  if (data.length == 0) {
+    ss.toast('No data')
   } else {
-    const headers = Object.keys(data[0]).sort((a,b) => a.localeCompare(b))
-    insertHeaders(sheet, headers);
-    insertRows(sheet, data, headers);
+    const headers = Object.keys(data[0]).sort((a, b) => a.localeCompare(b))
+    insertHeaders(sheet, headers)
+    insertRows(sheet, data, headers)
   }
-
 }
 
 /**
- *  @param {SpreadsheetApp.Sheet} sheet 
+ *  @param {SpreadsheetApp.Sheet} sheet
  *  @param {string[]} headers
  */
 function insertHeaders(sheet, headers) {
-  let i = 1;
+  let i = 1
   headers.forEach(header => {
-    sheet.getRange(1,i).setValue(header)
-    i++;
+    sheet.getRange(1, i).setValue(header)
+    i++
   })
 }
 
 /**
- *  @param {SpreadsheetApp.Sheet} sheet 
+ *  @param {SpreadsheetApp.Sheet} sheet
  *  @param {any[]} data
  *  @param {string[]} headers
  */
 function insertRows(sheet, data, headers) {
-  const destinationRange = sheet.getRange(2, 1, data.length, headers.length);
-  const values = data.map(row => headers.map(h => row[h]))
-  destinationRange.setValues(values);
+  const destinationRange = sheet.getRange(2, 1, data.length, headers.length)
+  const values = data.map(row =>
+    headers.map(h => {
+      if (h.includes('date')) {
+        return new Date(row[h])
+      } else {
+        return row[h]
+      }
+    })
+  )
+  destinationRange.setValues(values)
 }
 
 /**
  * @param {SpreadsheetApp.Range} range
  */
-function recalculate(range){
-  var originalFormulas = range.getFormulas();
-  var originalValues = range.getValues();
-  
-  var valuesToEraseFormula = [];
-  var valuesToRestoreFormula = [];
-  
-  originalFormulas.forEach((rowValues,rowNum) => {
-    valuesToEraseFormula[rowNum] = [];
-    valuesToRestoreFormula[rowNum] = [];
+function recalculate(range) {
+  var originalFormulas = range.getFormulas()
+  var originalValues = range.getValues()
+
+  var valuesToEraseFormula = []
+  var valuesToRestoreFormula = []
+
+  originalFormulas.forEach((rowValues, rowNum) => {
+    valuesToEraseFormula[rowNum] = []
+    valuesToRestoreFormula[rowNum] = []
     rowValues.forEach((cellValue, columnNum) => {
       const a = originalValues[rowNum][columnNum]
-      if('' === cellValue){
+      if ('' === cellValue) {
         //The cell doesn't have formula
-        valuesToEraseFormula[rowNum][columnNum] = originalValues[rowNum][columnNum];
-        valuesToRestoreFormula[rowNum][columnNum] = originalValues[rowNum][columnNum];
-      }else{
+        valuesToEraseFormula[rowNum][columnNum] = originalValues[rowNum][columnNum]
+        valuesToRestoreFormula[rowNum][columnNum] = originalValues[rowNum][columnNum]
+      } else {
         //The cell has a formula.
-        valuesToEraseFormula[rowNum][columnNum] = null;
-        valuesToRestoreFormula[rowNum][columnNum] = originalFormulas[rowNum][columnNum];
+        valuesToEraseFormula[rowNum][columnNum] = null
+        valuesToRestoreFormula[rowNum][columnNum] = originalFormulas[rowNum][columnNum]
       }
     })
   })
-  
-  range.setValues(valuesToEraseFormula);
-  range.setValues(valuesToRestoreFormula);
+
+  range.setValues(valuesToEraseFormula)
+  range.setValues(valuesToRestoreFormula)
 }
