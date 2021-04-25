@@ -1,4 +1,4 @@
-const API_KEY = '<TOKEN_FROM_BROWSER>'
+const API_KEY ='<TOKEN_FROM_BROWSER>'
 
 const OPERATIONS_URL =
   'https://epargnant.amundi-ee.com/api/individu/operations?flagFiltrageWebSalarie=true&flagInfoOC=Y&filtreStatutModeExclusion=false&flagRu=true&offset='
@@ -47,7 +47,7 @@ function getOperations() {
     nbOperations = jsonData.nbOperationsIndividuelles
     offset++
   }
-  return operations
+  return operations.filter(ope => ope.montantNet != 0)
 }
 
 /**
@@ -82,14 +82,27 @@ function updateMainSheet() {
 function insertRawData(sheetName, data) {
   const doc = SpreadsheetApp.getActiveSpreadsheet()
   const sheet = resetSheet(doc, sheetName)
-  var ss = SpreadsheetApp.getActiveSpreadsheet()
-  if (data.length == 0) {
-    ss.toast('No data')
-  } else {
-    const headers = Object.keys(data[0]).sort((a, b) => a.localeCompare(b))
-    insertHeaders(sheet, headers)
-    insertRows(sheet, data, headers)
+  
+  const flatData = data.map(d => flatten(d))
+  const headers = Object.keys(flatData[0]).sort((a, b) => a.localeCompare(b))
+  insertHeaders(sheet, headers)
+  insertRows(sheet, flatData, headers)
+}
+
+function flatten(object, prefix='') {
+  if (object == null || Array.isArray(object)){
+    return object
   }
+  let finalObject = {}
+  Object.keys(object).forEach(key => {
+    if (typeof object[key] == 'object' && object[key] != null && !Array.isArray(object[key])){
+      finalObject = {...finalObject, ...flatten(object[key], key+'__')}
+    }
+    else {
+      finalObject[prefix+key] = object[key]
+    }
+  })
+  return finalObject
 }
 
 /**
@@ -97,11 +110,7 @@ function insertRawData(sheetName, data) {
  *  @param {string[]} headers
  */
 function insertHeaders(sheet, headers) {
-  let i = 1
-  headers.forEach(header => {
-    sheet.getRange(1, i).setValue(header)
-    i++
-  })
+  sheet.getRange(1,1,1,headers.length).setValues([headers])
 }
 
 /**
